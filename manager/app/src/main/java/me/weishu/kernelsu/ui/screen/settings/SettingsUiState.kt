@@ -10,12 +10,13 @@ data class SettingsUiState(
     val uiMode: String = UiMode.DEFAULT_VALUE,
     val checkUpdate: Boolean = true,
     val checkModuleUpdate: Boolean = true,
+    val checkKsuDriverUpdate: Boolean = true,
     val themeMode: Int = 0,
     val miuixMonet: Boolean = false,
     val keyColor: Int = 0,
     val colorStyle: String = PaletteStyle.TonalSpot.name,
     val colorSpec: String = ColorSpec.SpecVersion.Default.name,
-    val enableOfficialLauncher: Boolean = false,
+    val appIconMode: Int = 0,
     val classicUi: Boolean = false,
     val showSwitchIcon: Boolean = false,
     val scrollAnimation: Boolean = false,
@@ -30,6 +31,7 @@ data class SettingsUiState(
     // WebUI Modules shortcut entry
     val isToolkitInstalled: Boolean = false,
     val isKpatchNextInstalled: Boolean = false,
+    val isSusfsInstalled: Boolean = false,
 
     // Su Compat
     val suCompatStatus: String = "",
@@ -47,6 +49,9 @@ data class SettingsUiState(
     // SELinux Hide
     val selinuxHideStatus: String = "",
     val isSelinuxHideEnabled: Boolean = false,
+
+    // SELinux Mode
+    val isSelinuxEnforcing: Boolean = true,
 
     // SU Log
     val sulogStatus: String = "",
@@ -75,8 +80,10 @@ data class SettingsUiState(
 
 @Immutable
 data class SettingsScreenActions(
+    val onSetAppIconMode: (Int) -> Unit,
     val onSetCheckUpdate: (Boolean) -> Unit,
     val onSetCheckModuleUpdate: (Boolean) -> Unit,
+    val onSetCheckKsuDriverUpdate: (Boolean) -> Unit,
     val onOpenTheme: () -> Unit,
     val onSetUiModeIndex: (Int) -> Unit,
     val onOpenProfileTemplate: () -> Unit,
@@ -84,6 +91,7 @@ data class SettingsScreenActions(
     val onSetKernelUmountEnabled: (Boolean) -> Unit,
     val onSetWebViewZygoteUmountEnabled: (Boolean) -> Unit,
     val onSetSelinuxHideEnabled: (Boolean) -> Unit,
+    val onSetSelinuxEnforcing: (Boolean) -> Unit,
     val onSetSulogEnabled: (Boolean) -> Unit,
     val onSetAdbRootEnabled: (Boolean) -> Unit,
     val onSetAvcSpoofEnabled: (Boolean) -> Unit,
