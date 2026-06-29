@@ -29,10 +29,12 @@ import androidx.compose.material.icons.rounded.FolderDelete
 import androidx.compose.material.icons.rounded.Language
 import androidx.compose.material.icons.rounded.Palette
 import androidx.compose.material.icons.rounded.Policy
+import androidx.compose.material.icons.rounded.VerifiedUser
 import androidx.compose.material.icons.rounded.RemoveCircle
 import androidx.compose.material.icons.rounded.RemoveModerator
 import androidx.compose.material.icons.rounded.RestartAlt
 import androidx.compose.material.icons.rounded.Update
+import androidx.compose.material.icons.rounded.NewReleases
 import androidx.compose.material.icons.rounded.UploadFile
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.mutableStateOf
@@ -143,6 +145,20 @@ fun SettingPagerMiuix(
                                 checked = uiState.checkModuleUpdate,
                                 onCheckedChange = actions.onSetCheckModuleUpdate
                             )
+                            SwitchPreference(
+                                title = stringResource(R.string.settings_check_ksu_driver_update),
+                                summary = stringResource(R.string.settings_check_ksu_driver_update_summary),
+                                startAction = {
+                                    Icon(
+                                        Icons.Rounded.NewReleases,
+                                        modifier = Modifier.padding(end = 6.dp),
+                                        contentDescription = stringResource(R.string.settings_check_ksu_driver_update),
+                                        tint = colorScheme.onBackground
+                                    )
+                                },
+                                checked = uiState.checkKsuDriverUpdate,
+                                onCheckedChange = actions.onSetCheckKsuDriverUpdate
+                            )
                         }
                     }
 
@@ -244,6 +260,23 @@ fun SettingPagerMiuix(
                                     }
                                 )
                             }
+                            if (uiState.isSusfsInstalled) {
+                                ArrowPreference(
+                                    title = stringResource(R.string.settings_susfs4ksu),
+                                    summary = stringResource(R.string.settings_susfs4ksu_summary),
+                                    startAction = {
+                                        Icon(
+                                            Icons.Rounded.Build,
+                                            modifier = Modifier.padding(end = 6.dp),
+                                            contentDescription = stringResource(id = R.string.settings_susfs4ksu),
+                                            tint = colorScheme.onBackground
+                                        )
+                                    },
+                                    onClick = {
+                                        actions.onOpenWebUi("susfs4ksu", "SUSFS for KernelSU")
+                                    }
+                                )
+                            }
                         }
                     }
 
@@ -342,6 +375,21 @@ fun SettingPagerMiuix(
                                 enabled = uiState.selinuxHideStatus == "supported",
                                 checked = uiState.isSelinuxHideEnabled,
                                 onCheckedChange = actions.onSetSelinuxHideEnabled
+                            )
+
+                            SwitchPreference(
+                                title = stringResource(id = R.string.settings_selinux_enforcing),
+                                summary = if (uiState.isSelinuxEnforcing) stringResource(R.string.selinux_status_enforcing) else stringResource(R.string.selinux_status_permissive),
+                                startAction = {
+                                    Icon(
+                                        Icons.Rounded.VerifiedUser,
+                                        modifier = Modifier.padding(end = 6.dp),
+                                        contentDescription = stringResource(id = R.string.settings_selinux_enforcing),
+                                        tint = colorScheme.onBackground
+                                    )
+                                },
+                                checked = uiState.isSelinuxEnforcing,
+                                onCheckedChange = actions.onSetSelinuxEnforcing
                             )
 
                             val sulogSummary = when (uiState.sulogStatus) {
