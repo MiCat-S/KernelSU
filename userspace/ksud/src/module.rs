@@ -958,10 +958,9 @@ fn list_module(path: &str) -> Vec<HashMap<String, String>> {
 }
 
 pub fn is_metamodule_installed() -> Result<()> {
-
     if metamodule::has_metamodule() {
         println!("Installed");
-        return Ok(());
+        Ok(())
     } else {
         Err(anyhow!("Unsupported"))
     }
