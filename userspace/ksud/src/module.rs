@@ -3,7 +3,10 @@ use crate::utils::*;
 use crate::{
     assets, defs, ksucalls, metamodule,
     restorecon::{restore_syscon, setsyscon},
-    risk::{contains_risk, print_risk_block, print_risk_pause_prompt, print_risk_timeout_block, RiskSeverity},
+    risk::{
+        RiskSeverity, contains_risk, print_risk_block, print_risk_pause_prompt,
+        print_risk_timeout_block,
+    },
     sepolicy,
 };
 
@@ -988,10 +991,9 @@ fn list_module(path: &str) -> Vec<HashMap<String, String>> {
 }
 
 pub fn is_metamodule_installed() -> Result<()> {
-
     if metamodule::has_metamodule() {
         println!("Installed");
-        return Ok(());
+        Ok(())
     } else {
         Err(anyhow!("Unsupported"))
     }
