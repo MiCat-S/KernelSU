@@ -147,7 +147,7 @@ fn contains_malware(module_prop: &str) -> bool {
 
 fn normalize_malware_text(text: &str) -> String {
     text.nfkc()
-        .flat_map(|character| character.to_lowercase())
+        .flat_map(char::to_lowercase)
         .map(|character| {
             if character.is_alphanumeric() {
                 character
@@ -1000,10 +1000,9 @@ fn list_module(path: &str) -> Vec<HashMap<String, String>> {
 }
 
 pub fn is_metamodule_installed() -> Result<()> {
-
     if metamodule::has_metamodule() {
         println!("Installed");
-        return Ok(());
+        Ok(())
     } else {
         Err(anyhow!("Unsupported"))
     }
