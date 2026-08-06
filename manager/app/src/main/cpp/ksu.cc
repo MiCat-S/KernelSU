@@ -264,10 +264,10 @@ bool is_avc_spoof_enabled() {
 
 const char* get_hook_mode(void)
 {
-    static struct ksu_get_hook_mode_cmd cmd = {0};
+    static struct ksu_hook_type_cmd cmd = {0};
 
-    if (ksuctl(KSU_IOCTL_GET_HOOK_MODE, &cmd) == 0)
-        return cmd.mode;
+    if (ksuctl(KSU_IOCTL_HOOK_TYPE, &cmd) == 0)
+        return cmd.hook_type;
 
     return "Unknown";
 }
