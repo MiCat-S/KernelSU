@@ -57,7 +57,11 @@ void write_sulog(uint8_t sym)
 
 	// WARNING!!! this is LE only!
 	entry.s_time = boottime_s_get();
+#ifdef CONFIG_KSU_SUSFS
+	entry.data = (uint32_t)current_real_cred()->uid.val;
+#else
 	entry.data = (uint32_t)current_uid().val;
+#endif // #ifdef CONFIG_KSU_SUSFS
 	*((char *)&entry.data + 3) = sym;
 
 	// we can perform this write atomic on 64-bit
