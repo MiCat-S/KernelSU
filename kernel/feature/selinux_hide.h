@@ -11,10 +11,12 @@
  *
  */
 
-// selinux_hide's list, hand-rolled hazard pointers via C11 atomics
+// selinux_hide's list, hazard pointers via C11 atomics
 
 #ifndef __KSU_H_SELINUX_HIDE
 #define __KSU_H_SELINUX_HIDE
+
+#include <linux/threads.h>
 
 void ksu_selinux_hide_init();
 void ksu_selinux_hide_exit();
@@ -37,27 +39,12 @@ static struct ksu_hide_buf *ksu_hide_rule_list __read_mostly = NULL;
 
 static DEFINE_MUTEX(selinux_hide_list_mutex);
 
-/**
- * this has to be done due to how ARM/64 atomics work.
- * arm64 atomics promises exclusive cacheline access (mEsi)
- * so we need to align one ptr to one cacheline
- *
- * we assume max of 16 nproc, not a big deal for now
- * we can heapify once theres a real need for dynamic handling 
- * (e.g. num_possible_cpus())
- *
- */
-#if CONFIG_NR_CPUS > 16
-#define KSU_MAX_HP_SLOTS 16
-#else
-#define KSU_MAX_HP_SLOTS CONFIG_NR_CPUS
-static_assert(KSU_MAX_HP_SLOTS > 0);
-#endif
 struct ksu_hazptr_slot {
 	struct ksu_hide_buf *ptr;
 } ____cacheline_aligned;
 
-static struct ksu_hazptr_slot ksu_selinux_hide_hazptr[KSU_MAX_HP_SLOTS] = { 0 };
+// Give each possible CPU its own cacheline and slot, including sparse CPU IDs.
+static struct ksu_hazptr_slot ksu_selinux_hide_hazptr[NR_CPUS] = { 0 };
 
 // NOTE: can ret null on uninitialized state
 static inline struct ksu_hide_buf *ksu_selinux_hide_get_buf(struct ksu_hide_buf **g_buf)
@@ -65,7 +52,7 @@ static inline struct ksu_hide_buf *ksu_selinux_hide_get_buf(struct ksu_hide_buf 
 	// reader has to pin its own slot
 	preempt_disable();
 
-	int slot = raw_smp_processor_id() % KSU_MAX_HP_SLOTS;
+	int slot = raw_smp_processor_id();
 	struct ksu_hide_buf *buf;
 
 check_buf:
@@ -80,7 +67,7 @@ check_buf:
 
 static inline void ksu_selinux_hide_put_buf(struct ksu_hide_buf **unused)
 {
-	int slot = raw_smp_processor_id() % KSU_MAX_HP_SLOTS;
+	int slot = raw_smp_processor_id();
 	__atomic_store_n(&ksu_selinux_hide_hazptr[slot].ptr, NULL, __ATOMIC_RELEASE);
 	
 	preempt_enable();
@@ -96,7 +83,7 @@ static inline void ksu_selinux_hide_hazptr_free(struct ksu_hide_buf *old_ptr)
 	// only free it once ALL slots say that their slot no longer contains old ptr
 	// #pragma GCC unroll 0
 	// #pragma nounroll
-	for (i = 0; i < KSU_MAX_HP_SLOTS; i++) {
+	for (i = 0; i < NR_CPUS; i++) {
 		while (__atomic_load_n(&ksu_selinux_hide_hazptr[i].ptr, __ATOMIC_ACQUIRE) == old_ptr)
 			cpu_relax();
 	}

@@ -102,9 +102,19 @@ fn scan_driver_fd() -> io::Result<Option<RawFd>> {
 }
 
 pub fn claim_inherited_driver_fd() -> io::Result<()> {
-    if DRIVER_FD.get().is_none()
-        && let Some(fd) = scan_driver_fd()?
-    {
+    let fd = match DRIVER_FD.get() {
+        Some(fd) => Some(*fd),
+        None => scan_driver_fd()?,
+    };
+
+    if let Some(fd) = fd {
+        let flags = unsafe { libc::fcntl(fd, libc::F_GETFD) };
+        if flags < 0 {
+            return Err(io::Error::last_os_error());
+        }
+        if unsafe { libc::fcntl(fd, libc::F_SETFD, flags | libc::FD_CLOEXEC) } < 0 {
+            return Err(io::Error::last_os_error());
+        }
         let _ = DRIVER_FD.set(fd);
     }
     Ok(())
