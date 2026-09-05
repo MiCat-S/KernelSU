@@ -132,14 +132,28 @@ KEEP_SYMBOL int ksu_vfs_fstatat(int dfd, const char __user *filename, struct kst
 	return ksu_vfs_fstatat_fn(dfd, filename, stat, flags);
 }
 
+// Exec has closed CLOEXEC descriptors before returning successfully.
+static int ksu_finish_su_exec(int result, bool su_session)
+{
+	if (result == 0 && su_session) {
+		int fd = ksu_install_su_fd();
+
+		if (fd < 0)
+			pr_err("su_compat: post-exec session fd failed: %d\n", fd);
+	}
+	return result;
+}
+
 // execve
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(3, 14, 0)
 DEFINE_ASM_STUB(ksu_do_execveat_common_fn);
 KEEP_SYMBOL int ksu_do_execveat_common_fn(int fd, struct filename *filename, struct user_arg_ptr argv, struct user_arg_ptr envp, int flags);
 KEEP_SYMBOL int ksu_do_execveat_common(int fd, struct filename *filename, struct user_arg_ptr argv, struct user_arg_ptr envp, int flags)
 {
-	ksu_handle_execveat(&fd, &filename, &argv, &envp, &flags);
-	return ksu_do_execveat_common_fn(fd, filename, argv, envp, flags);
+	bool su_session = ksu_handle_execveat(&fd, &filename, &argv, &envp, &flags);
+	int ret = ksu_do_execveat_common_fn(fd, filename, argv, envp, flags);
+
+	return ksu_finish_su_exec(ret, su_session);
 }
 
 #if LINUX_VERSION_CODE < KERNEL_VERSION(5, 9, 0)
@@ -147,8 +161,10 @@ DEFINE_ASM_STUB(ksu_do_execve_file_fn);
 KEEP_SYMBOL int ksu_do_execve_file_fn(int fd, struct filename *filename, struct user_arg_ptr argv, struct user_arg_ptr envp, int flags, struct file *file);
 KEEP_SYMBOL int ksu_do_execve_file(int fd, struct filename *restrict filename, struct user_arg_ptr argv, struct user_arg_ptr envp, int flags, struct file *restrict file)
 {
-	ksu_handle_execveat(&fd, &filename, &argv, &envp, &flags);
-	return ksu_do_execve_file_fn(fd, filename, argv, envp, flags, file);
+	bool su_session = ksu_handle_execveat(&fd, &filename, &argv, &envp, &flags);
+	int ret = ksu_do_execve_file_fn(fd, filename, argv, envp, flags, file);
+
+	return ksu_finish_su_exec(ret, su_session);
 }
 #endif // < 5.9
 
@@ -157,8 +173,10 @@ DEFINE_ASM_STUB(ksu_do_execve_common_fn);
 KEEP_SYMBOL int ksu_do_execve_common_fn(struct filename *filename, struct user_arg_ptr argv, struct user_arg_ptr envp);
 KEEP_SYMBOL int ksu_do_execve_common(struct filename *filename, struct user_arg_ptr argv, struct user_arg_ptr envp)
 {
-	ksu_handle_execveat((int *)AT_FDCWD, &filename, &argv, &envp, 0);
-	return ksu_do_execve_common_fn(filename, argv, envp);
+	bool su_session = ksu_handle_execveat((int *)AT_FDCWD, &filename, &argv, &envp, 0);
+	int ret = ksu_do_execve_common_fn(filename, argv, envp);
+
+	return ksu_finish_su_exec(ret, su_session);
 }
 #endif // < 3.19
 
@@ -168,8 +186,10 @@ DEFINE_ASM_STUB(ksu_do_execve_common_fn);
 KEEP_SYMBOL int ksu_do_execve_common_fn(const char *filename, struct user_arg_ptr argv, struct user_arg_ptr envp);
 KEEP_SYMBOL int ksu_do_execve_common(const char *filename, struct user_arg_ptr argv, struct user_arg_ptr envp)
 {
-	ksu_legacy_execve_sucompat(&filename, &argv, &envp);
-	return ksu_do_execve_common_fn(filename, argv, envp);
+	bool su_session = ksu_legacy_execve_sucompat(&filename, &argv, &envp);
+	int ret = ksu_do_execve_common_fn(filename, argv, envp);
+
+	return ksu_finish_su_exec(ret, su_session);
 }
 #endif
 

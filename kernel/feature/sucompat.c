@@ -299,19 +299,19 @@ SUCOMPAT_HOOK_TYPE ksu_handle_sys_execveat(int *fd, const char __user **filename
 	return 0;
 }
 
-static __always_inline void ksu_sucompat_kernel_common(int *restrict fd, void **restrict filename_ptr, void *restrict argv, void *restrict envp, int *restrict flags, const char *function_name)
+static __always_inline bool ksu_sucompat_kernel_common(int *restrict fd, void **restrict filename_ptr, void *restrict argv, void *restrict envp, int *restrict flags, const char *function_name)
 {
 #ifdef CONFIG_KSU_FEATURE_ADBROOT
 	ksu_adb_root_execve_kernel((void *)filename_ptr, (void *)envp);
 #endif
 	if (!is_su_allowed((const void **)filename_ptr))
-		return;
+		return false;
 
 	if (!!fd && fd != (int *)AT_FDCWD && *fd != AT_FDCWD)
-		return;
+		return false;
 
 	if (!!flags && !!*flags)
-		return;
+		return false;
 
 	constexpr char su[16] = SU_PATH;
 
@@ -320,17 +320,17 @@ static __always_inline void ksu_sucompat_kernel_common(int *restrict fd, void **
 	uint128_t *fn128 = (uint128_t *)*(char **)filename_ptr;
 	const uint128_t mask = make128const(0x00FFFFFFFFFFFFFFULL, 0xFFFFFFFFFFFFFFFFULL);
 	if (likely((*fn128 & mask) != (*su128 & mask)))
-		return;
+		return false;
 #endif
 	// getname_flags pads this so nothing to worry about, dereference with confidence!
 	uint64_t *su_p = (uint64_t *)su;
 	uint64_t *fn_p = (uint64_t *)*(char **)filename_ptr;
 
 	if (likely((fn_p[1] & 0x00FFFFFFFFFFFFFFULL) != (su_p[1] & 0x00FFFFFFFFFFFFFFULL)))
-		return;
+		return false;
 
 	if (unlikely(fn_p[0] != su_p[0]))
-		return;
+		return false;
 
 	// we only handle execve here after removing vfs_statx hook for >= 6.1
 	write_sulog('x');
@@ -339,9 +339,11 @@ static __always_inline void ksu_sucompat_kernel_common(int *restrict fd, void **
 	ksu_sulog_emit(KSU_SULOG_EVENT_SUCOMPAT, NULL, NULL, GFP_KERNEL);
 #endif
 	if (!!escape_with_root_profile())
-		return;
+		return false;
 
+#ifndef CONFIG_KSU_HACK_ARM64_BRANCH_LINK
 	ksu_install_su_fd(); // ksu#3679
+#endif
 
 	// NOTE: we only check file existence, not exec success!
 	struct path kpath;
@@ -352,13 +354,13 @@ static __always_inline void ksu_sucompat_kernel_common(int *restrict fd, void **
 	pr_info("su_compat: %s su->ksud!%s\n", function_name, (is_compat_task()) ? " [compat]" : "");
 	constexpr char ksud[16] = KSUD_PATH;
 	memcpy_inline(*filename_ptr, ksud, sizeof(ksud));
-	return;
+	return true;
 
 no_ksud:
 	pr_info("su_compat: %s su->sh!%s\n", function_name, (is_compat_task()) ? " [compat]" : "" );
 	constexpr char sh[16] = SH_PATH;
 	memcpy_inline(*filename_ptr, sh, sizeof(sh));
-	return;
+	return false;
 }
 
 struct filename; // take note: struct filename *filename, for do_execveat_common / do_execve_common on >= 3.14
@@ -374,15 +376,23 @@ SUCOMPAT_HOOK_TYPE ksu_handle_execveat(int *fd, struct filename **filename_ptr, 
 
 	// first member of struct filename is char *name.
 	// char *filename = *(char **)struct_filename;
+#ifdef CONFIG_KSU_HACK_ARM64_BRANCH_LINK
+	return ksu_sucompat_kernel_common(fd, (void **)struct_filename, argv, envp, flags, "do_execveat_common");
+#else
 	ksu_sucompat_kernel_common(fd, (void **)struct_filename, argv, envp, flags, "do_execveat_common");
 	return 0;
+#endif
 }
 
 // take note: char *filename, for do_execve_common on < 3.14
 SUCOMPAT_HOOK_TYPE ksu_legacy_execve_sucompat(const char **filename_ptr, void *argv, void *envp)
 {
+#ifdef CONFIG_KSU_HACK_ARM64_BRANCH_LINK
+	return ksu_sucompat_kernel_common((int *)AT_FDCWD, (void **)filename_ptr, argv, envp, 0, "do_execve_common");
+#else
 	ksu_sucompat_kernel_common((int *)AT_FDCWD, (void **)filename_ptr, argv, envp, 0, "do_execve_common");
 	return 0;
+#endif
 }
 
 #ifdef CONFIG_KSU_TAMPER_SYSCALL_TABLE
