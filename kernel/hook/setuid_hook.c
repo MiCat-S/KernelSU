@@ -85,6 +85,20 @@ extern struct work_struct susfs_extra_works;
 
 static int handle_zygote_next_setresuid(uid_t new_uid)
 {
+    // Root-allowed apps must not inherit the no-su marker.
+    if (ksu_is_allow_uid_for_current(new_uid)) {
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(5, 10, 0)
+        if (current->seccomp.mode == SECCOMP_MODE_FILTER && current->seccomp.filter) {
+            spin_lock_irq(&current->sighand->siglock);
+            ksu_seccomp_allow_cache(current->seccomp.filter, __NR_reboot);
+            spin_unlock_irq(&current->sighand->siglock);
+        }
+#else
+        disable_seccomp();
+#endif
+        return 0;
+    }
+
     // Check if spawned process is isolated service first, and force to do umount if so
     if (is_isolated_process(new_uid)) {
         susfs_set_current_proc_no_su();
@@ -100,20 +114,6 @@ static int handle_zygote_next_setresuid(uid_t new_uid)
         susfs_set_current_proc_umounted();
         susfs_set_current_proc_umounted_for_zygote_next();
         goto do_susfs_work;
-    }
-
-    // - Disable seccomp restriction for root allowed apps since running with "su" will disable seccomp anyway
-    if (ksu_is_allow_uid_for_current(new_uid)) {
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(5, 10, 0)
-        if (current->seccomp.mode == SECCOMP_MODE_FILTER && current->seccomp.filter) {
-            spin_lock_irq(&current->sighand->siglock);
-            ksu_seccomp_allow_cache(current->seccomp.filter, __NR_reboot);
-            spin_unlock_irq(&current->sighand->siglock);
-        }
-#else
-        disable_seccomp();
-#endif
-        return 0;
     }
 
     susfs_set_current_proc_no_su();
