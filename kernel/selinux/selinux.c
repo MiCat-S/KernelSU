@@ -198,18 +198,28 @@ static inline bool is_sid_match_tsec(const struct cred_security_struct *tsec, u3
                                      const char *fallback_context)
 #endif
 {
+    if (!tsec || !fallback_context) {
+        return false;
+    }
+
     // Fast path: use cached SID if available
     if (likely(cached_sid != 0)) {
         return tsec->sid == cached_sid;
     }
 
     // Slow path fallback: string comparison (only before cache is initialized)
-    struct lsm_context ctx;
-    bool result;
+    struct lsm_context ctx = { 0 };
+    bool result = false;
+    size_t expected_len;
     if (__security_secid_to_secctx(tsec->sid, &ctx)) {
         return false;
     }
-    result = strncmp(fallback_context, ctx.context, ctx.len) == 0;
+    expected_len = strlen(fallback_context);
+    if (ctx.context && ctx.len &&
+        (ctx.len == expected_len ||
+         (ctx.len == expected_len + 1 && ctx.context[expected_len] == '\0'))) {
+        result = strncmp(fallback_context, ctx.context, expected_len) == 0;
+    }
     __security_release_secctx(&ctx);
 
     return result;
@@ -221,7 +231,7 @@ static inline bool is_sid_match_tsec(const struct cred_security_struct *tsec, u3
  */
 static inline bool is_sid_match(const struct cred *cred, u32 cached_sid, const char *fallback_context)
 {
-    if (!cred) {
+    if (!cred || !fallback_context) {
         return false;
     }
 #if LINUX_VERSION_CODE < KERNEL_VERSION(6, 18, 0)
