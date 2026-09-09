@@ -42,6 +42,9 @@ static const struct ksu_feature_handler kernel_umount_handler = {
 };
 
 extern int path_umount(struct path *path, int flags);
+#if defined(CONFIG_KSU_SUSFS) && defined(CONFIG_KSU_SUSFS_TRY_UMOUNT)
+extern void susfs_try_umount(uid_t uid);
+#endif
 
 static void ksu_umount_mnt(const char *mnt, struct path *path, int flags)
 {
@@ -51,7 +54,7 @@ static void ksu_umount_mnt(const char *mnt, struct path *path, int flags)
     }
 }
 
-static void try_umount(const char *mnt, int flags)
+void try_umount(const char *mnt, int flags)
 {
     struct path path;
     int err = kern_path(mnt, 0, &path);
@@ -111,6 +114,10 @@ int ksu_handle_umount(uid_t old_uid, uid_t new_uid)
     pr_info("handle umount for uid: %d, pid: %d\n", new_uid, current->pid);
 
     const struct cred *saved = override_creds(ksu_cred);
+
+#if defined(CONFIG_KSU_SUSFS) && defined(CONFIG_KSU_SUSFS_TRY_UMOUNT)
+    susfs_try_umount(new_uid);
+#endif
 
     struct mount_entry *entry;
     down_read(&mount_list_lock);
