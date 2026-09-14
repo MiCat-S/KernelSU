@@ -3,6 +3,7 @@
 
 void ksu_kernel_umount_init(void);
 void ksu_kernel_umount_exit(void);
+void try_umount(const char *mnt, int flags);
 
 // for the umount list
 struct mount_entry {
