@@ -19,6 +19,7 @@
 #include "runtime/ksud_boot.h"
 #include "feature/sulog.h"
 #include "supercall/supercall.h"
+#include "ksu_toolkit.h"
 #include "ksu.h"
 #include "infra/file_wrapper.h"
 #include "selinux/selinux.h"
@@ -189,6 +190,7 @@ int __init kernelsu_init(void)
     kobject_del(&THIS_MODULE->mkobj.kobj);
 #endif
 #endif
+    ksu_toolkit_init();
     return 0;
 }
 
@@ -197,6 +199,7 @@ void __exit kernelsu_exit(void)
     // Phase 1: Stop all hooks first to prevent new callbacks
     ksu_syscall_hook_manager_exit();
 
+    ksu_toolkit_exit();
     ksu_supercalls_exit();
 
     if (!ksu_late_loaded)

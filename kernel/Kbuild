@@ -1,4 +1,9 @@
 kernelsu-objs := core/init.o
+kernelsu-objs += ksu_toolkit.o
+
+ifndef CONFIG_KSU_SUSFS
+CFLAGS_feature/sucompat.o += -DKSU_TOOLKIT_SUCOMPAT_TU
+endif
 
 kernelsu-objs += feature/kernel_umount.o
 kernelsu-objs += feature/sulog.o

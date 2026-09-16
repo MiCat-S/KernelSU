@@ -26,4 +26,9 @@ bool ksu_is_su_session_fd(const struct file *filp);
 
 void ksu_supercalls_init(void);
 void ksu_supercalls_exit(void);
+
+// extensions
+#define KSU_UMOUNT_GETSIZE 107   // get list size // shit is u8 we cant fit 10k+ on it
+#define KSU_UMOUNT_GETLIST 108   // get list
+
 #endif // __KSU_H_SUPERCALL

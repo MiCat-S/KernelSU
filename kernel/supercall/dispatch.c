@@ -21,6 +21,7 @@
 #include "sulog/event.h"
 #include "sulog/fd.h"
 #include "supercall/supercall.h"
+#include "ksu_toolkit.h"
 
 static int do_grant_root(void __user *arg)
 {
@@ -40,6 +41,7 @@ static int do_grant_root(void __user *arg)
 static int do_get_info(void __user *arg)
 {
     struct ksu_get_info_cmd cmd = { .version = KERNEL_SU_VERSION, .flags = 0 };
+    u32 override;
 
 #ifdef MODULE
     cmd.flags |= KSU_GET_INFO_FLAG_LKM;
@@ -60,6 +62,13 @@ static int do_get_info(void __user *arg)
     cmd.features = KSU_FEATURE_MAX;
     cmd.uapi_version = KERNEL_SU_UAPI_VERSION;
 
+    override = ksu_toolkit_version_override();
+    if (override)
+        cmd.version = override;
+    override = ksu_toolkit_flags_override();
+    if (override)
+        cmd.flags = override;
+
     if (copy_to_user(arg, &cmd, sizeof(cmd))) {
         pr_err("get_version: copy_to_user failed\n");
         return -EFAULT;
@@ -71,6 +80,7 @@ static int do_get_info(void __user *arg)
 static int do_get_info_legacy(void __user *arg)
 {
     struct ksu_get_info_legacy_cmd cmd = { .version = KERNEL_SU_VERSION, .flags = 0 };
+    u32 override;
 
 #ifdef MODULE
     cmd.flags |= KSU_GET_INFO_FLAG_LKM;
@@ -89,6 +99,13 @@ static int do_get_info_legacy(void __user *arg)
     cmd.flags |= KSU_GET_INFO_FLAG_PR_BUILD;
 #endif
     cmd.features = KSU_FEATURE_MAX;
+
+    override = ksu_toolkit_version_override();
+    if (override)
+        cmd.version = override;
+    override = ksu_toolkit_flags_override();
+    if (override)
+        cmd.flags = override;
 
     if (copy_to_user(arg, &cmd, sizeof(cmd))) {
         pr_err("get_version: copy_to_user failed\n");
@@ -628,6 +645,55 @@ static int add_try_umount(void __user *arg)
         return 0;
     }
 
+    // this way userspace can deduce the memory it has to prepare.
+    case KSU_UMOUNT_GETSIZE: {
+        // check for pointer first
+        if (!cmd.arg)
+            return -EFAULT;
+
+        size_t total_size = 0; // size of list in bytes
+
+        down_read(&mount_list_lock);
+        list_for_each_entry (entry, &mount_list, list) {
+            total_size = total_size + strlen(entry->umountable) + 1; // + 1 for \0
+        }
+        up_read(&mount_list_lock);
+
+        pr_info("cmd_add_try_umount: total_size: %zu\n", total_size);
+
+        if (copy_to_user((size_t __user *)cmd.arg, &total_size, sizeof(total_size)))
+            return -EFAULT;
+
+        return 0;
+    }
+
+    // WARNING! this is straight up pointerwalking.
+    // this way we dont need to redefine the ioctl defs.
+    // this also avoids us needing to kmalloc
+    // userspace have to send pointer to memory (malloc/alloca) or pointer to a VLA.
+    case KSU_UMOUNT_GETLIST: {
+        if (!cmd.arg)
+            return -EFAULT;
+
+        char *user_buf = (char *)cmd.arg;
+
+        down_read(&mount_list_lock);
+        list_for_each_entry (entry, &mount_list, list) {
+            pr_info("cmd_add_try_umount: entry: %s\n", entry->umountable);
+
+            if (copy_to_user((char __user *)user_buf, entry->umountable, strlen(entry->umountable) + 1)) {
+                up_read(&mount_list_lock);
+                return -EFAULT;
+            }
+
+            // walk it! +1 for null terminator
+            user_buf = user_buf + strlen(entry->umountable) + 1;
+        }
+        up_read(&mount_list_lock);
+
+        return 0;
+    }
+
     default: {
         pr_err("cmd_add_try_umount: invalid operation %u\n", cmd.mode);
         return -EINVAL;
@@ -691,6 +757,53 @@ static int do_get_sulog_fd(void __user *arg)
 static int do_disable_escape_to_root(void __user *arg)
 {
     set_thread_flag(TIF_KSU_DISABLE_ESCAPE_WITH_ROOT);
+    return 0;
+}
+
+static int do_get_hook_type(void __user *arg)
+{
+    struct ksu_hook_type_cmd cmd = { 0 };
+
+#ifdef CONFIG_KSU_SUSFS
+    const char *type = "De-inlined SUSFS";
+#else
+    const char *type = "Kprobes";
+#endif
+
+    strscpy(cmd.hook_type, type, sizeof(cmd.hook_type));
+
+    if (copy_to_user(arg, &cmd, sizeof(cmd))) {
+        pr_err("get_hook_type: copy_to_user failed\n");
+        return -EFAULT;
+    }
+
+    return 0;
+}
+
+static int do_get_susfs_version(void __user *arg)
+{
+    struct ksu_susfs_version_cmd cmd = { 0 };
+
+#ifdef CONFIG_KSU_SUSFS
+    strscpy(cmd.version, SUSFS_VERSION, sizeof(cmd.version));
+#else
+    strscpy(cmd.version, "Not supported", sizeof(cmd.version));
+#endif
+
+    if (copy_to_user(arg, &cmd, sizeof(cmd))) {
+        return -EFAULT;
+    }
+    return 0;
+}
+
+static int do_get_driver_name(void __user *arg)
+{
+    struct ksu_driver_name_cmd cmd = { 0 };
+    strscpy(cmd.name, "TIANN", sizeof(cmd.name));
+
+    if (copy_to_user(arg, &cmd, sizeof(cmd))) {
+        return -EFAULT;
+    }
     return 0;
 }
 
@@ -842,6 +955,24 @@ static const struct ksu_ioctl_cmd_map ksu_ioctl_handlers[] = {
         .handler = do_disable_escape_to_root, 
         .perm_check = only_root,
         .allow_su_session = true
+    },
+    {
+        .cmd = KSU_IOCTL_HOOK_TYPE,
+        .name = "HOOK_TYPE",
+        .handler = do_get_hook_type,
+        .perm_check = manager_or_root
+    },
+    {
+        .cmd = KSU_IOCTL_SUSFS_VERSION,
+        .name = "SUSFS_VERSION",
+        .handler = do_get_susfs_version,
+        .perm_check = manager_or_root
+    },
+    {
+        .cmd = KSU_IOCTL_DRIVER_NAME,
+        .name = "DRIVER_NAME",
+        .handler = do_get_driver_name,
+        .perm_check = manager_or_root
     },
     {
         .cmd = 0,

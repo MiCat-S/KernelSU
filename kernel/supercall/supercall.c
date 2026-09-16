@@ -10,7 +10,6 @@
 #include <linux/task_work.h>
 #include <linux/uaccess.h>
 #include <linux/version.h>
-
 #include "uapi/supercall.h"
 #include "supercall/internal.h"
 #include "arch.h"
@@ -149,7 +148,6 @@ void __init ksu_supercalls_init(void)
     int rc;
 
     ksu_supercall_dump_commands();
-
     rc = register_kprobe(&reboot_kp);
     if (rc) {
         pr_err("reboot kprobe failed: %d\n", rc);
