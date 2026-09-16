@@ -104,6 +104,12 @@ void apply_kernelsu_rules()
     // allow all!
     ksu_allow(db, KERNEL_SU_DOMAIN, ALL, ALL, ALL);
 
+    ksu_allow(db, "domain", KERNEL_SU_DOMAIN, "unix_stream_socket", "read");
+    ksu_allow(db, "domain", KERNEL_SU_DOMAIN, "unix_stream_socket", "write");
+    ksu_allow(db, "domain", KERNEL_SU_DOMAIN, "unix_stream_socket", "connectto");
+    ksu_allow(db, "domain", KERNEL_SU_DOMAIN, "unix_stream_socket", "getopt");
+    ksu_allow(db, "domain", KERNEL_SU_DOMAIN, "unix_stream_socket", "getattr");
+
     // allow us do any ioctl
     if (db->policyvers >= POLICYDB_VERSION_XPERMS_IOCTL) {
         ksu_allowxperm(db, KERNEL_SU_DOMAIN, ALL, "blk_file", ALL);

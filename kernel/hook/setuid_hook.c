@@ -46,6 +46,7 @@ int ksu_handle_setresuid(uid_t old_uid, uid_t new_uid)
             spin_unlock_irq(&current->sighand->siglock);
         }
         ksu_set_task_tracepoint_flag(current);
+        return 0;
     } else {
         ksu_clear_task_tracepoint_flag_if_needed(current);
     }

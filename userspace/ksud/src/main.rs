@@ -48,6 +48,8 @@ mod restorecon;
 mod sepolicy;
 #[cfg(target_os = "android")]
 mod su;
+#[cfg(any(target_os = "android", test))]
+mod susfs_response;
 #[cfg(target_os = "android")]
 mod susfsd;
 #[cfg(target_os = "android")]

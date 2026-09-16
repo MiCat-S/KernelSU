@@ -135,8 +135,8 @@ void setup_selinux(const char *domain, struct cred *cred)
 
 void setup_ksu_cred(void)
 {
-    if (transive_to_domain(KERNEL_SU_CONTEXT, ksu_cred, false)) {
-        pr_err("setup ksu cred failed.\n");
+    if (ksu_cred) {
+        setup_selinux(KERNEL_SU_CONTEXT, ksu_cred);
     }
 }
 
@@ -234,7 +234,7 @@ void cache_sid(void)
 static bool is_sid_match(const struct cred *cred, u32 cached_sid,
                          const char *fallback_context)
 {
-    if (!cred) {
+    if (!cred || !fallback_context) {
         return false;
     }
 #if LINUX_VERSION_CODE < KERNEL_VERSION(6, 18, 0)
@@ -252,12 +252,18 @@ static bool is_sid_match(const struct cred *cred, u32 cached_sid,
     }
 
     // Slow path fallback: string comparison (only before cache is initialized)
-    struct lsm_context ctx;
-    bool result;
+    struct lsm_context ctx = { 0 };
+    bool result = false;
+    size_t expected_len;
     if (__ksu_security_secid_to_secctx(tsec->sid, &ctx)) {
         return false;
     }
-    result = strncmp(fallback_context, ctx.context, ctx.len) == 0;
+    expected_len = strlen(fallback_context);
+    if (ctx.context && ctx.len &&
+        (ctx.len == expected_len ||
+         (ctx.len == expected_len + 1 && ctx.context[expected_len] == '\0'))) {
+        result = strncmp(fallback_context, ctx.context, expected_len) == 0;
+    }
     __ksu_security_release_secctx(&ctx);
     return result;
 }
