@@ -115,12 +115,12 @@ change_spoof_uname:
 	// for release
 	if (strncpy_from_user(release_buf, (char __user *)u_ptr, sizeof(release_buf)) < 0)
 		return 0;
+	release_buf[sizeof(release_buf) - 1] = '\0';
 
 	// for version
 	if (strncpy_from_user(version_buf, (char __user *)(u_ptr + strlen(release_buf) + 1), sizeof(version_buf)) < 0)
 		return 0;
 
-	release_buf[sizeof(release_buf) - 1] = '\0'; 
 	version_buf[sizeof(version_buf) - 1] = '\0'; 
 
 	if (original_release_buf[0] == '\0') {
