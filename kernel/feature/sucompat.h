@@ -9,9 +9,10 @@ void ksu_sucompat_init(void);
 
 #ifdef CONFIG_KSU_SUSFS
 struct filename;
-noinline int ksu_handle_faccessat(int *dfd, struct filename **filename,
-                                  int *mode, int *__unused_flags);
-noinline int ksu_handle_stat(int *dfd, struct filename **filename, int *flags);
+noinline __used int ksu_handle_faccessat(int *dfd, struct filename **filename,
+                                         int *mode, int *__unused_flags);
+noinline __used int ksu_handle_stat(int *dfd, struct filename **filename,
+                                    int *flags);
 #else
 noinline long ksu_handle_faccessat_sucompat(int orig_nr, struct pt_regs *regs);
 noinline long ksu_handle_stat_sucompat(int orig_nr, struct pt_regs *regs);

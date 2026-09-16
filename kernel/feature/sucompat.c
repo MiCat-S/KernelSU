@@ -76,6 +76,14 @@ static char __user *empty_user_path(void)
 }
 
 static const char su_path[] = SU_PATH;
+#ifdef CONFIG_KSU_SUSFS
+static const char sh_path[] = SH_PATH;
+
+static char __user *sh_user_path(void)
+{
+    return userspace_stack_buffer(sh_path, sizeof(sh_path));
+}
+#endif
 
 static bool is_ksud_exists()
 {
@@ -88,11 +96,52 @@ static bool is_ksud_exists()
     return true;
 }
 
+#ifdef CONFIG_KSU_SUSFS
+static int ksu_rewrite_susfs_su_path(struct filename **filename)
+{
+    const struct cred *old_cred;
+    struct filename *name;
+
+    if (!filename)
+        return -EINVAL;
+
+    name = READ_ONCE(*filename);
+    if (IS_ERR_OR_NULL(name) || IS_ERR_OR_NULL(name->name) ||
+        strcmp(name->name, su_path))
+        return 0;
+
+    old_cred = override_creds(ksu_cred);
+    if (is_ksud_exists())
+        memcpy((void *)name->name, sh_path, sizeof(sh_path));
+    revert_creds(old_cred);
+    return 0;
+}
+
+noinline __used int ksu_handle_faccessat(int *dfd, struct filename **filename,
+                                         int *mode, int *__unused_flags)
+{
+    (void)dfd;
+    (void)mode;
+    (void)__unused_flags;
+    return ksu_rewrite_susfs_su_path(filename);
+}
+
+noinline __used int ksu_handle_stat(int *dfd, struct filename **filename,
+                                    int *flags)
+{
+    (void)dfd;
+    (void)flags;
+    return ksu_rewrite_susfs_su_path(filename);
+}
+#endif
+
 long ksu_handle_faccessat_sucompat(int orig_nr, struct pt_regs *regs)
 {
     const char __user **filename_user, *orig_filename;
     long ret;
+#ifndef CONFIG_KSU_SUSFS
     const struct cred *old_cred;
+#endif
 
     if (!ksu_is_allow_uid_for_current(current_uid().val)) {
         goto do_orig_facessat;
@@ -105,6 +154,25 @@ long ksu_handle_faccessat_sucompat(int orig_nr, struct pt_regs *regs)
     strncpy_from_user_nofault(path, *filename_user, sizeof(path));
 
     if (unlikely(!memcmp(path, su_path, sizeof(su_path)))) {
+#ifdef CONFIG_KSU_SUSFS
+        struct filename kernel_filename = { .name = path };
+        struct filename *kernel_filename_ptr = &kernel_filename;
+        char __user *replacement;
+
+        ksu_handle_faccessat(NULL, &kernel_filename_ptr, NULL, NULL);
+        if (strcmp(path, sh_path))
+            goto do_orig_facessat;
+
+        replacement = sh_user_path();
+        if (!replacement)
+            goto do_orig_facessat;
+
+        orig_filename = *filename_user;
+        *filename_user = replacement;
+        ret = ksu_syscall_table[orig_nr](regs);
+        *filename_user = orig_filename;
+        return ret;
+#else
         old_cred = override_creds(ksu_cred);
         if (is_ksud_exists()) {
             pr_info("faccessat su->ksud!\n");
@@ -117,6 +185,7 @@ long ksu_handle_faccessat_sucompat(int orig_nr, struct pt_regs *regs)
         } else {
             revert_creds(old_cred);
         }
+#endif
     }
 
 do_orig_facessat:
@@ -127,7 +196,9 @@ long ksu_handle_stat_sucompat(int orig_nr, struct pt_regs *regs)
 {
     const char __user **filename_user, *orig_filename;
     long ret;
+#ifndef CONFIG_KSU_SUSFS
     const struct cred *old_cred;
+#endif
 
     if (!ksu_is_allow_uid_for_current(current_uid().val)) {
         goto do_orig_stat;
@@ -140,6 +211,25 @@ long ksu_handle_stat_sucompat(int orig_nr, struct pt_regs *regs)
     strncpy_from_user_nofault(path, *filename_user, sizeof(path));
 
     if (unlikely(!memcmp(path, su_path, sizeof(su_path)))) {
+#ifdef CONFIG_KSU_SUSFS
+        struct filename kernel_filename = { .name = path };
+        struct filename *kernel_filename_ptr = &kernel_filename;
+        char __user *replacement;
+
+        ksu_handle_stat(NULL, &kernel_filename_ptr, NULL);
+        if (strcmp(path, sh_path))
+            goto do_orig_stat;
+
+        replacement = sh_user_path();
+        if (!replacement)
+            goto do_orig_stat;
+
+        orig_filename = *filename_user;
+        *filename_user = replacement;
+        ret = ksu_syscall_table[orig_nr](regs);
+        *filename_user = orig_filename;
+        return ret;
+#else
         old_cred = override_creds(ksu_cred);
         if (is_ksud_exists()) {
             pr_info("newfstatat su->ksud!\n");
@@ -152,6 +242,7 @@ long ksu_handle_stat_sucompat(int orig_nr, struct pt_regs *regs)
         } else {
             revert_creds(old_cred);
         }
+#endif
     }
 
 do_orig_stat:
